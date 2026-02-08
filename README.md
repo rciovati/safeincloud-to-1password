@@ -1,7 +1,7 @@
 # README — Safe In Cloud XML → 1Password importer
 
 This script reads an XML export containing `<card>` records and creates one 1Password item per card using the 1Password CLI.
-It also base64-decodes embedded `<image>` payloads, saves them locally, and attaches them to the created item as file attachments.
+It also base64-decodes embedded `<image>` and `<file>` payloads, saves them locally, and attaches them to the created item as file attachments.
 
 Adapted from: https://gitlab.com/bdeeming/safe-in-cloud-to-csv. 
 This version takes a different approach: rather than producing a CSV for a separate import step, it uses the 1Password CLI to create items directly (and attach decoded images) during the conversion process.
@@ -31,7 +31,8 @@ python3 import.py export.xml --vault "Private"
   - Field name contains “password” or “pin” → `fieldType=password` (concealed)
   - Otherwise → `fieldType=text`
 - Attachments:
-  - `<image>` base64 payloads are decoded to files and attached using `fieldType=file`.
+  - `<image>` base64 payloads are decoded to files and attached using `fieldType=file` (format auto-detected via magic bytes).
+  - `<file>` base64 payloads with `name` attributes are decoded and attached using `fieldType=file` (original filename preserved).
 
 ## Options
 - `--vault VAULT`: Target vault name/ID.

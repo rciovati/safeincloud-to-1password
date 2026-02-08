@@ -59,6 +59,53 @@ def guess_extension(data: bytes) -> str:
         return ".pdf"
     return ".png"
 
+def decode_base64_payload(b64: str) -> bytes:
+    """Decode base64 payload with fallback for non-strict padding."""
+    b64_compact = "".join(b64.split())
+    try:
+        return base64.b64decode(b64_compact, validate=True)
+    except binascii.Error:
+        # Fallback: some exports aren't strictly padded/validated
+        return base64.b64decode(b64_compact + "===")
+
+def process_attachment(
+    attachments_dir: Path,
+    element: ET.Element,
+    assignments: list[str],
+    filename: str | None = None,
+    auto_detect_ext: bool = False,
+    prefix: str = "",
+    index: int = 1
+) -> bool:
+    """
+    Decode base64 from element, save to file, and create assignment.
+
+    Returns True if successful, False if element had no base64 content.
+    """
+    b64 = (element.text or "").strip()
+    if not b64:
+        return False
+
+    data = decode_base64_payload(b64)
+
+    # Determine output filename
+    if filename:
+        # Use provided filename, sanitize it
+        safe_name = safe_filename(filename)
+    else:
+        # Generate filename with extension detection
+        ext = guess_extension(data) if auto_detect_ext else ""
+        base = safe_filename(f"{prefix}_{index}")
+        safe_name = f"{base}{ext}"
+
+    out_path = attachments_dir / safe_name
+    out_path.write_bytes(data)
+
+    attach_name = escape_assignment_name(safe_name)
+    assignments.append(f"{attach_name}[file]={str(out_path)}")
+
+    return True
+
 
 def run_op_create_item(vault: str | None, category: str, title: str, url: str | None,
                        tags: list[str], assignments: list[str], dry_run: bool) -> None:
@@ -140,6 +187,9 @@ def main() -> int:
             # Collect ALL <image> tags (not just one)
             images = card.findall("./image")
 
+            # Collect ALL <file> tags with base64 payloads
+            files = card.findall("./file")
+
             # Build op assignment statements
             assignments: list[str] = []
 
@@ -189,30 +239,30 @@ def main() -> int:
                 if gname:
                     tags.append(gname)
 
-            # Decode & attach each image
+            # Decode & attach each image (auto-detect format)
             for idx, img in enumerate(images, start=1):
-                b64 = (img.text or "").strip()
-                if not b64:
-                    continue
+                if process_attachment(
+                    attachments_dir=attachments_dir,
+                    element=img,
+                    assignments=assignments,
+                    auto_detect_ext=True,
+                    prefix=title,
+                    index=idx
+                ):
+                    # Remove the tag to avoid duplicating base64 into text fields
+                    card.remove(img)
 
-                # Remove whitespace/newlines inside base64
-                b64_compact = "".join(b64.split())
-                try:
-                    data = base64.b64decode(b64_compact, validate=True)
-                except binascii.Error:
-                    # Fallback: some exports aren't strictly padded/validated
-                    data = base64.b64decode(b64_compact + "===")
-
-                ext = guess_extension(data)
-                base = safe_filename(f"{title}_image_{idx}")
-                out_path = attachments_dir / f"{base}{ext}"
-                out_path.write_bytes(data)
-
-                attach_name = escape_assignment_name(f"Image {idx}{ext}")
-                assignments.append(f"{attach_name}[file]={str(out_path)}")
-
-                # Remove the tag to avoid duplicating base64 into text fields
-                card.remove(img)
+            # Decode & attach each file (use provided filename)
+            for idx, file_elem in enumerate(files, start=1):
+                filename = file_elem.attrib.get("name", "").strip() or f"file_{idx}"
+                if process_attachment(
+                    attachments_dir=attachments_dir,
+                    element=file_elem,
+                    assignments=assignments,
+                    filename=filename
+                ):
+                    # Remove the tag to avoid duplicating base64 into text fields
+                    card.remove(file_elem)
 
             run_op_create_item(
                 vault=args.vault,
