@@ -7,6 +7,8 @@ Import Safe In Cloud XMLs into 1Password via `op item create`.
 
 Requires:
   - 1Password CLI (`op`) installed and authenticated.
+
+Inspired by https://gitlab.com/bdeeming/safe-in-cloud-to-csv
 """
 
 import argparse

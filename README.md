@@ -3,6 +3,9 @@
 This script reads an XML export containing `<card>` records and creates one 1Password item per card using the 1Password CLI.
 It also base64-decodes embedded `<image>` payloads, saves them locally, and attaches them to the created item as file attachments.
 
+Adapted from: https://gitlab.com/bdeeming/safe-in-cloud-to-csv. 
+This version takes a different approach: rather than producing a CSV for a separate import step, it uses the 1Password CLI to create items directly (and attach decoded images) during the conversion process.
+
 ## Requirements
 - Python 3.10+ (tested with `python3`).  
 - 1Password CLI (`op`) installed and already authenticated (for example via the 1Password app), since the script calls `op item create`.
